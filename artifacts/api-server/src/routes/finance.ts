@@ -74,6 +74,23 @@ import {
 
 const router: IRouter = Router();
 
+// Generated response validators coerce dates to Date objects. These domain
+// fields are calendar days, so preserve YYYY-MM-DD at the JSON boundary.
+function calendarDates(value: unknown): unknown {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (Array.isArray(value)) return value.map(calendarDates);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, calendarDates(entry)]));
+  }
+  return value;
+}
+
+router.use((_req, res, next) => {
+  const json = res.json.bind(res);
+  res.json = ((body: unknown) => json(calendarDates(body))) as typeof res.json;
+  next();
+});
+
 function parsedId(params: unknown) {
   return GetSiteParams.safeParse(params);
 }
@@ -83,7 +100,7 @@ function isWithin(date: string, from?: string, to?: string): boolean {
 }
 
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date());
 }
 
 function asDateString(value: string | Date | null | undefined): string | null {
@@ -396,6 +413,10 @@ router.patch("/sales-invoices/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "請求が見つかりません" });
     return;
   }
+  if (!body.data.issuedAt && existing.receivedAmount > 0) {
+    res.status(409).json({ error: "入金記録がある請求は未請求に戻せません" });
+    return;
+  }
   const [site] = await db.select({ id: sitesTable.id }).from(sitesTable).where(eq(sitesTable.id, body.data.siteId)).limit(1);
   if (!site || !(await isClientCounterparty(body.data.counterpartyId))) {
     res.status(400).json({ error: "現場と請求先を確認してください" });
@@ -705,17 +726,23 @@ router.get("/export.csv", async (req, res): Promise<void> => {
   }
   const from = asDateString(parsed.data.from) ?? undefined;
   const to = asDateString(parsed.data.to) ?? undefined;
+  if (from && to && from > to) {
+    res.status(400).json({ error: "期間の開始日と終了日を確認してください" });
+    return;
+  }
   const [invoices, bills] = await Promise.all([loadSalesInvoices(), loadPurchaseBills()]);
   const rows = ["日付,取引先,現場,摘要,税抜,消費税,税込,区分"];
   for (const invoice of invoices) {
-    const date = invoice.issuedAt ?? today();
+    const date = invoice.issuedAt ?? invoice.createdAt.toISOString().slice(0, 10);
     if (isWithin(date, from, to)) {
       rows.push(eventRow(date, invoice.counterpartyName, invoice.siteName, `${invoice.issuedAt ? "請求" : "未請求"}${invoice.memo ? `：${invoice.memo}` : ` #${invoice.id}`}`, invoice.netAmount, invoice.taxAmount, invoice.grossAmount, "売上"));
     }
     const gross = invoice.grossAmount || 1;
+    let receivedBefore = 0;
     for (const receipt of invoice.receipts) {
+      const tax = Math.round(((receivedBefore + receipt.amount) * invoice.taxAmount) / gross) - Math.round((receivedBefore * invoice.taxAmount) / gross);
+      receivedBefore += receipt.amount;
       if (!isWithin(receipt.receivedAt, from, to)) continue;
-      const tax = Math.round((receipt.amount * invoice.taxAmount) / gross);
       rows.push(eventRow(receipt.receivedAt, invoice.counterpartyName, invoice.siteName, `入金${receipt.memo ? `：${receipt.memo}` : ` #${invoice.id}`}`, receipt.amount - tax, tax, receipt.amount, "売上"));
     }
   }
@@ -724,9 +751,11 @@ router.get("/export.csv", async (req, res): Promise<void> => {
       rows.push(eventRow(bill.billedAt, bill.counterpartyName, bill.siteName, `仕入${bill.memo ? `：${bill.memo}` : ` #${bill.id}`}`, bill.netAmount, bill.taxAmount, bill.grossAmount, "仕入"));
     }
     const gross = bill.grossAmount || 1;
+    let paidBefore = 0;
     for (const payment of bill.payments) {
+      const tax = Math.round(((paidBefore + payment.amount) * bill.taxAmount) / gross) - Math.round((paidBefore * bill.taxAmount) / gross);
+      paidBefore += payment.amount;
       if (!isWithin(payment.paidAt, from, to)) continue;
-      const tax = Math.round((payment.amount * bill.taxAmount) / gross);
       rows.push(eventRow(payment.paidAt, bill.counterpartyName, bill.siteName, `支払い${payment.memo ? `：${payment.memo}` : ` #${bill.id}`}`, payment.amount - tax, tax, payment.amount, "仕入"));
     }
   }

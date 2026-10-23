@@ -5,6 +5,24 @@
 
 @custom-variant dark (&:is(.dark *));
 
+.invoice-line-editor { display: grid; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid #dedace; }
+.line-row-top { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+.add-line-button { display: flex; justify-content: center; align-items: center; gap: 6px; min-height: 40px; border: 1px dashed #829b8c; border-radius: 6px; color: #345c48; background: transparent; cursor: pointer; }
+.amount-preview { display: flex; gap: 12px; flex-wrap: wrap; justify-content: space-between; font-size: 12px; padding-top: 8px; }
+.cashflow-period { border-top: 1px solid #dedace; padding-top: 16px; margin-top: 16px; }
+.cashflow-period-heading { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; padding-bottom: 10px; }
+.cashflow-period-heading > b { width: 100%; font-size: 15px; }
+.negative-net { color: #a94636; }
+/* Decorative English captions are omitted; all functional labels are Japanese. */
+.eyebrow, .brand-lockup small { display: none !important; }
+.page-heading .eyebrow { display: block !important; }
+@media (max-width: 640px) {
+  .stack-form label { font-size: 13px !important; }
+  .stack-form input, .stack-form select, .stack-form textarea { font-size: 16px !important; min-height: 44px; }
+  .button, .icon-button, .text-link, .add-line-button { min-height: 44px; }
+  .line-heading { flex-wrap: wrap; gap: 5px; }
+}
+
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));

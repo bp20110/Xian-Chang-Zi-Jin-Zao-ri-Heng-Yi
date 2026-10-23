@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { MutationCache, QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { Link, Route, Switch, Router as WouterRouter, useLocation, useRoute } from 'wouter';
 import {
   useGetAuthStatus, getGetAuthStatusQueryKey, useSetupPassword, useLogin, useLogout,
@@ -25,7 +25,15 @@ import {
   ShieldCheck, Users, WalletCards, X, Wrench, AlertCircle, Trash2, Pencil, ReceiptText,
 } from 'lucide-react';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  mutationCache: new MutationCache({
+    onError: (error) => {
+      const payload = (error as {data?:{error?:string}}).data;
+      window.alert(payload?.error || '保存できませんでした。入力内容と通信状態をご確認ください。');
+    },
+  }),
+  defaultOptions: {queries: {staleTime: 15000, retry: 1}},
+});
 const nav = [
   { href: '/', label: 'ホーム', icon: LayoutDashboard },
   { href: '/sites', label: '現場', icon: HardHat },
@@ -85,7 +93,7 @@ function Workspace({ onLogout }: { onLogout:()=>void }) {
   const logout = useLogout(); const qc=useQueryClient();
   const titles:Record<string,string> = {'/':'今日の資金予定','/sites':'現場台帳','/counterparties':'取引先','/sales':'請求・入金','/purchases':'仕入・支払','/cashflow':'資金繰り','/export':'データ出力'};
   const title=path.startsWith('/sites/')?'現場の収支':titles[path]||'現場収支';
-  const doLogout=()=>logout.mutate(undefined,{onSuccess:()=>{qc.invalidateQueries({queryKey:getGetAuthStatusQueryKey()});onLogout();}});
+  const doLogout=()=>logout.mutate(undefined,{onSuccess:()=>{qc.clear();onLogout();}});
   return <div className="app-shell">
     <aside className={`sidebar ${mobileMenu?'sidebar-open':''}`}>
       <Link href="/" className="brand-lockup" onClick={()=>setMobileMenu(false)}><span className="brand-mark"><HardHat size={21}/></span><span>現場収支<small>FIELD NOTEBOOK</small></span></Link>
@@ -112,7 +120,7 @@ function Workspace({ onLogout }: { onLogout:()=>void }) {
 }
 
 function PageHeading({eyebrow,title,subtitle,action}:{eyebrow:string;title:string;subtitle:string;action?:ReactNode}) {
-  return <div className="page-heading"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{subtitle}</p></div>{action}</div>;
+  return <div className="page-heading"><div><div className="eyebrow">{title}</div><h1>{title}</h1><p>{subtitle}</p></div>{action}</div>;
 }
 function Button({children,onClick,variant='primary',testId,disabled,type='button'}:{children:ReactNode;onClick?:()=>void;variant?:'primary'|'quiet'|'danger'|'outline';testId?:string;disabled?:boolean;type?:'button'|'submit'}) {
   return <button type={type} onClick={onClick} disabled={disabled} data-testid={testId} className={`button button-${variant}`}>{children}</button>;
@@ -140,7 +148,7 @@ function DashboardPage() {
 function SitesPage() {
   const q=useGetSiteFinances();const sitesQ=useGetSites();const cpQ=useGetCounterparties();const create=useCreateSite();const update=useUpdateSite();const del=useDeleteSite();const qc=useQueryClient();
   const [modal,setModal]=useState(false);const [editing,setEditing]=useState<Site|null>(null);const [search,setSearch]=useState('');
-  const invalidate=()=>{qc.invalidateQueries({queryKey:getGetSitesQueryKey()});qc.invalidateQueries({queryKey:getGetSiteFinancesQueryKey()});qc.invalidateQueries({queryKey:getGetDashboardQueryKey()});};
+  const invalidate=()=>{qc.invalidateQueries();};
   const sites=(sitesQ.data||[]).filter(s=>s.name.toLowerCase().includes(search.toLowerCase()));
   const open=(s?:Site)=>{setEditing(s||null);setModal(true)};
   const save=(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();const f=new FormData(e.currentTarget);const data:SiteInput={name:String(f.get('name')),clientId:f.get('clientId')?Number(f.get('clientId')):null,status:String(f.get('status')) as 'active'|'completed',contractAmount:f.get('contractAmount')?Number(f.get('contractAmount')):null,memo:String(f.get('memo')||'')||null};const done=()=>{invalidate();setModal(false)};editing?update.mutate({id:editing.id,data},{onSuccess:done}):create.mutate({data},{onSuccess:done});};
@@ -163,7 +171,7 @@ function LedgerPurchases({bills}:{bills:PurchaseBill[]}){return <Panel><div clas
 
 function CounterpartiesPage() {
   const q=useGetCounterparties();const create=useCreateCounterparty();const update=useUpdateCounterparty();const del=useDeleteCounterparty();const qc=useQueryClient();const [modal,setModal]=useState(false);const [editing,setEditing]=useState<Counterparty|null>(null);const [search,setSearch]=useState('');
-  const invalidate=()=>qc.invalidateQueries({queryKey:getGetCounterpartiesQueryKey()});
+  const invalidate=()=>qc.invalidateQueries();
   const save=(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();const f=new FormData(e.currentTarget);const data:CounterpartyInput={name:String(f.get('name')),isClient:f.get('isClient')==='on',isSupplier:f.get('isSupplier')==='on',closingDay:f.get('closingDay')?Number(f.get('closingDay')):null,paymentTerms:String(f.get('paymentTerms')||'')||null,memo:String(f.get('memo')||'')||null};const done=()=>{invalidate();setModal(false)};editing?update.mutate({id:editing.id,data},{onSuccess:done}):create.mutate({data},{onSuccess:done});};
   return <><PageHeading eyebrow="CONTACT BOOK / 取引先" title="取引先" subtitle="発注者・仕入先の情報をまとめて管理します。" action={<Button onClick={()=>{setEditing(null);setModal(true)}}><Plus size={17}/>取引先を登録</Button>}/>
     <div className="toolbar"><label className="search-box"><Search size={16}/><input placeholder="取引先名で検索" value={search} onChange={e=>setSearch(e.target.value)}/></label><span className="muted">{q.data?.length||0} 件</span></div>
@@ -174,11 +182,11 @@ function CounterpartiesPage() {
 
 function SalesPage() {
   const q=useGetSalesInvoices();const clients=useGetCounterparties();const sites=useGetSites();const create=useCreateSalesInvoice();const update=useUpdateSalesInvoice();const del=useDeleteSalesInvoice();const receipt=useCreateReceipt();const delReceipt=useDeleteReceipt();const qc=useQueryClient();const [show,setShow]=useState(false);const [editing,setEditing]=useState<SalesInvoice|null>(null);const [selected,setSelected]=useState<number|null>(null);const [filter,setFilter]=useState('all');
-  const invalidate=(id?:number)=>{qc.invalidateQueries({queryKey:getGetSalesInvoicesQueryKey()});qc.invalidateQueries({queryKey:getGetDashboardQueryKey()});qc.invalidateQueries({queryKey:getGetSiteFinancesQueryKey()});if(id)qc.invalidateQueries({queryKey:getGetSiteQueryKey(id)});};
+  const invalidate=(_id?:number)=>{qc.invalidateQueries();};
   const recent=readRecent('recent-sales');
   const active=(q.data||[]).filter(i=>filter==='all'||(filter==='outstanding'?i.outstandingAmount>0:filter==='overdue'?i.status!=='unbilled'&&!!i.expectedPaymentAt&&i.expectedPaymentAt<today()&&i.outstandingAmount>0:filter==='unbilled'?i.status==='unbilled':true));
   const save=(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();const f=new FormData(e.currentTarget);const data:SalesInvoiceInput={siteId:Number(f.get('siteId')),counterpartyId:Number(f.get('counterpartyId')),issuedAt:String(f.get('issuedAt')||'')||null,expectedPaymentAt:String(f.get('expectedPaymentAt')||'')||null,memo:String(f.get('memo')||'')||null,lines:lineFrom(f)};const done=()=>{saveRecent('recent-sales',{siteId:data.siteId,counterpartyId:data.counterpartyId,taxRates:data.lines.map(line=>line.taxRate)});invalidate(data.siteId);setShow(false);setEditing(null)};editing?update.mutate({id:editing.id,data},{onSuccess:done}):create.mutate({data},{onSuccess:done});};
-  const addReceipt=(e:FormEvent<HTMLFormElement>,inv:SalesInvoice)=>{e.preventDefault();const f=new FormData(e.currentTarget);receipt.mutate({id:inv.id,data:{receivedAt:String(f.get('receivedAt')),amount:Number(f.get('amount')),memo:String(f.get('memo')||'')||null}},{onSuccess:()=>invalidate(inv.siteId)});};
+  const addReceipt=(e:FormEvent<HTMLFormElement>,inv:SalesInvoice)=>{e.preventDefault();const f=new FormData(e.currentTarget);receipt.mutate({id:inv.id,data:{receivedAt:String(f.get('receivedAt')),amount:Number(f.get('amount')),memo:String(f.get('memo')||'')||null}},{onSuccess:()=>{invalidate(inv.siteId);setSelected(null)}});};
   const selectedQ=useGetSalesInvoice(selected||0,{query:{queryKey:getGetSalesInvoiceQueryKey(selected||0),enabled:!!selected}});
   return <><PageHeading eyebrow="SALES / 請求と入金" title="請求・入金" subtitle="請求額と入金状況を追いかけます。" action={<Button onClick={()=>setShow(true)}><Plus size={17}/>請求を登録</Button>}/>
      <div className="filter-tabs">{[['all','すべて'],['unbilled','未請求'],['outstanding','未入金'],['overdue','入金遅れ']].map(([v,l])=><button key={v} className={filter===v?'selected':''} onClick={()=>setFilter(v)}>{l}</button>)}</div>
@@ -190,11 +198,11 @@ function SalesPage() {
 
 function PurchasesPage() {
   const q=useGetPurchaseBills();const cps=useGetCounterparties();const sites=useGetSites();const create=useCreatePurchaseBill();const update=useUpdatePurchaseBill();const del=useDeletePurchaseBill();const payment=useCreateSupplierPayment();const delPayment=useDeleteSupplierPayment();const qc=useQueryClient();const [show,setShow]=useState(false);const [editing,setEditing]=useState<PurchaseBill|null>(null);const [selected,setSelected]=useState<PurchaseBill|null>(null);const [filter,setFilter]=useState('all');
-  const invalidate=(id?:number)=>{qc.invalidateQueries({queryKey:getGetPurchaseBillsQueryKey()});qc.invalidateQueries({queryKey:getGetDashboardQueryKey()});qc.invalidateQueries({queryKey:getGetSiteFinancesQueryKey()});if(id)qc.invalidateQueries({queryKey:getGetSiteQueryKey(id)});};
+  const invalidate=(_id?:number)=>{qc.invalidateQueries();};
   const recent=readRecent('recent-purchase');
   const bills=(q.data||[]).filter(b=>filter==='all'||(filter==='unpaid'?b.outstandingAmount>0:true));
   const save=(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();const f=new FormData(e.currentTarget);const data:PurchaseBillInput={siteId:Number(f.get('siteId')),counterpartyId:Number(f.get('counterpartyId')),billedAt:String(f.get('billedAt')),dueAt:String(f.get('dueAt')),memo:String(f.get('memo')||'')||null,lines:lineFrom(f)};const done=()=>{saveRecent('recent-purchase',{siteId:data.siteId,counterpartyId:data.counterpartyId,taxRates:data.lines.map(line=>line.taxRate)});invalidate(data.siteId);setShow(false);setEditing(null)};editing?update.mutate({id:editing.id,data},{onSuccess:done}):create.mutate({data},{onSuccess:done});};
-  const addPayment=(e:FormEvent<HTMLFormElement>,b:PurchaseBill)=>{e.preventDefault();const f=new FormData(e.currentTarget);payment.mutate({id:b.id,data:{paidAt:String(f.get('paidAt')),amount:Number(f.get('amount')),memo:String(f.get('memo')||'')||null}},{onSuccess:()=>invalidate(b.siteId)});};
+  const addPayment=(e:FormEvent<HTMLFormElement>,b:PurchaseBill)=>{e.preventDefault();const f=new FormData(e.currentTarget);payment.mutate({id:b.id,data:{paidAt:String(f.get('paidAt')),amount:Number(f.get('amount')),memo:String(f.get('memo')||'')||null}},{onSuccess:()=>{invalidate(b.siteId);setSelected(null)}});};
   return <><PageHeading eyebrow="PURCHASES / 仕入と支払" title="仕入・支払" subtitle="仕入先への支払いと、支払期日を確認します。" action={<Button onClick={()=>setShow(true)}><Plus size={17}/>仕入を登録</Button>}/><div className="filter-tabs">{[['all','すべて'],['unpaid','未払い']].map(([v,l])=><button key={v} className={filter===v?'selected':''} onClick={()=>setFilter(v)}>{l}</button>)}</div>
     <QueryState loading={q.isLoading} error={q.isError} retry={()=>q.refetch()}>{bills.length?<div className="records-list">{bills.map(b=><Panel className="record-card" key={b.id}><div className="record-main"><div className="record-symbol purchase-symbol"><ArrowUpRight size={18}/></div><div className="record-info"><b>{b.counterpartyName}</b><span>{b.siteName} ・ 請求 {dateLabel(b.billedAt)}</span></div><div className="record-amount"><Money value={b.grossAmount}/><small>{b.outstandingAmount>0?`未払い ${yen(b.outstandingAmount)}`:'支払済み'}</small></div></div><div className="record-bottom"><span className={`status-pill ${b.outstandingAmount>0?'status-open':'status-done'}`}>{b.outstandingAmount>0?'支払待ち':'支払済み'}</span><span className="record-due">支払期日 {dateLabel(b.dueAt)}</span><button className="text-link" onClick={()=>setSelected(b)}>支払いを記録 <ArrowRight size={14}/></button><button className="icon-button" aria-label="仕入を編集" onClick={()=>{setEditing(b);setShow(true)}}><Pencil size={15}/></button><button className="icon-button danger-text" aria-label="仕入を削除" onClick={()=>{if(confirm('この仕入を削除しますか？'))del.mutate({id:b.id},{onSuccess:()=>invalidate(b.siteId)})}}><Trash2 size={15}/></button></div>{b.payments?.length>0&&<div className="receipt-mini-list">{b.payments.map(p=><div key={p.id}><span>{dateLabel(p.paidAt)} 支払い</span><b>{yen(p.amount)}</b><button className="text-action danger-text" aria-label="支払い記録を削除" onClick={()=>{if(confirm('この支払い記録を削除しますか？'))delPayment.mutate({id:p.id},{onSuccess:()=>invalidate(b.siteId)})}}><X size={13}/></button></div>)}</div>}</Panel>)}</div>:<Empty title="仕入はありません" detail="仕入を登録すると、支払予定を管理できます。" action={<Button onClick={()=>setShow(true)}><Plus size={16}/>仕入を登録</Button>}/>}</QueryState>
      {show&&<Modal title={editing?'仕入を編集':'仕入を登録'} onClose={()=>{setShow(false);setEditing(null)}}><form className="stack-form" onSubmit={save}><div className="form-row"><label>現場<select name="siteId" required defaultValue={editing?.siteId||recent.siteId||''}><option value="" disabled>現場を選択</option>{(sites.data||[]).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><label>仕入先<select name="counterpartyId" required defaultValue={editing?.counterpartyId||recent.counterpartyId||''}><option value="" disabled>取引先を選択</option>{(cps.data||[]).filter(c=>c.isSupplier).map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label></div><div className="form-row"><label>請求日<input name="billedAt" type="date" required defaultValue={inputDate(editing?.billedAt)}/></label><label>支払期日<input name="dueAt" type="date" required defaultValue={inputDate(editing?.dueAt)}/></label></div><LineInputs lines={editing?.lines||[]} lastTaxRate={recent.taxRates?.[0]}/><label>メモ<input name="memo" placeholder="任意" defaultValue={editing?.memo||''}/></label><div className="modal-actions"><Button variant="quiet" onClick={()=>{setShow(false);setEditing(null)}}>キャンセル</Button><Button type="submit" disabled={create.isPending||update.isPending}>{editing?'変更を保存':'仕入を登録'}</Button></div></form></Modal>}
@@ -232,11 +240,26 @@ function CashflowPage() {
 function localIso(date:Date){return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`}
 
 function ExportPage() {
-  const [from,setFrom]=useState('');const [to,setTo]=useState('');const [ready,setReady]=useState(false);const params={...(from?{from}:{}),...(to?{to}:{})};
-  const q=useExportCsv(params,{query:{queryKey:getExportCsvQueryKey(params),enabled:ready}});
-  const download=()=>{setReady(true);q.refetch().then(r=>{if(r.data){const url=URL.createObjectURL(r.data as Blob);const a=document.createElement('a');a.href=url;a.download=`genba-shushi-${today()}.csv`;a.click();URL.revokeObjectURL(url);setReady(false)}})};
-  return <><PageHeading eyebrow="DATA / CSV EXPORT" title="データ出力" subtitle="登録した請求・入金・仕入の記録をCSVで保存します。"/>
-    <div className="export-layout"><Panel className="export-card"><div className="export-art"><div className="export-file"><FileText size={30}/><span>CSV</span></div><div className="export-stamp">現場収支<br/>記録データ</div></div><div className="eyebrow">CSV / UTF-8</div><h2>帳簿を手元に保存</h2><p>期間を指定して、現場の収支データをダウンロードできます。期間を空欄にすると全期間が対象です。</p><div className="form-row"><label>開始日<input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label><label>終了日<input type="date" value={to} onChange={e=>setTo(e.target.value)}/></label></div><Button onClick={download} disabled={q.isFetching}><Download size={17}/>{q.isFetching?'準備しています…':'CSVをダウンロード'}</Button>{q.isError&&<p className="form-error">出力できませんでした。もう一度お試しください。</p>}</Panel><aside className="export-aside"><div className="eyebrow">NOTE</div><h3>出力について</h3><ul><li>指定期間の記録をCSV形式で保存します。</li><li>出力データはお使いの端末にダウンロードされます。</li><li>帳簿の保管や確認にご利用ください。</li></ul><div className="export-aside-bottom"><ShieldCheck size={17}/>安全に保管してください</div></aside></div>
+  const [from,setFrom]=useState('');const [to,setTo]=useState('');const params={...(from?{from}:{}),...(to?{to}:{})};
+  const q=useExportCsv(params,{query:{queryKey:getExportCsvQueryKey(params),enabled:false},request:{responseType:'blob'}});
+  const download=()=>{q.refetch().then(r=>{if(r.data){const url=URL.createObjectURL(r.data);const a=document.createElement('a');a.href=url;a.download=`genba-shushi-${today()}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}})};
+  return <><PageHeading eyebrow="データ出力" title="データ出力" subtitle="請求・入金・仕入請求・支払いの記録をCSVで保存します。"/>
+    <div className="export-layout">
+      <Panel className="export-card">
+        <div className="export-art"><div className="export-file"><FileText size={30}/><span>CSV</span></div><div className="export-stamp">現場収支<br/>記録データ</div></div>
+        <h2>記録を手元に保存</h2>
+        <p>期間を空欄にすると全期間が対象です。Excelで開けるBOM付きUTF-8形式です。</p>
+        <div className="form-row"><label>開始日<input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label><label>終了日<input type="date" min={from||undefined} value={to} onChange={e=>setTo(e.target.value)}/></label></div>
+        <Button onClick={download} disabled={q.isFetching||Boolean(from&&to&&from>to)}><Download size={17}/>{q.isFetching?'準備しています…':'CSVをダウンロード'}</Button>
+        {q.isError&&<p className="form-error">出力できませんでした。もう一度お試しください。</p>}
+      </Panel>
+      <aside className="export-aside"><h3>出力について</h3><ul>
+        <li>日付・取引先・現場・摘要・税抜・消費税・税込・区分の順に出力します。</li>
+        <li>請求・入金・仕入請求・支払いはそれぞれ別の行です。摘要で記録の種類を確認できます。</li>
+        <li>請求と入金、仕入請求と支払いの金額が両方含まれます。全行の合計は売上・原価の合計にはなりません。</li>
+        <li>分割入金・分割払いの税額は元の記録の税額を按分し、端数は後の記録で調整します。</li>
+      </ul><div className="export-aside-bottom"><ShieldCheck size={17}/>安全に保管してください</div></aside>
+    </div>
   </>;
 }
 

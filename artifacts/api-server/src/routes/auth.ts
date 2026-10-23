@@ -1,5 +1,6 @@
 import {
   createHmac,
+  createHash,
   randomBytes,
   scrypt as scryptCallback,
   timingSafeEqual,
@@ -29,7 +30,10 @@ function sessionSecret(): string {
 }
 
 function signature(expiration: string): string {
-  return createHmac("sha256", sessionSecret()).update(expiration).digest("base64url");
+  return createHmac("sha256", sessionSecret())
+    .update(expiration)
+    .update(process.env.ADMIN_PASSWORD ?? "")
+    .digest("base64url");
 }
 
 function cookieValue(req: Request): string | undefined {
@@ -101,7 +105,7 @@ function isRateLimited(req: Request): boolean {
 
 async function authStatus(): Promise<{ configured: boolean; authenticated: boolean }> {
   const [credential] = await db.select({ id: adminCredentialsTable.id }).from(adminCredentialsTable).limit(1);
-  return { configured: Boolean(credential), authenticated: false };
+  return { configured: Boolean(credential || process.env.ADMIN_PASSWORD), authenticated: false };
 }
 
 router.get("/auth/status", async (req, res): Promise<void> => {
@@ -111,6 +115,10 @@ router.get("/auth/status", async (req, res): Promise<void> => {
 });
 
 router.post("/auth/setup", async (req, res): Promise<void> => {
+  if (process.env.ADMIN_PASSWORD || process.env.NODE_ENV === "production") {
+    res.status(403).json({ error: "管理用パスワードは安全な設定欄で指定してください。設定済みの場合はログインしてください" });
+    return;
+  }
   const parsed = SetupPasswordBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -146,7 +154,14 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     return;
   }
   const [credential] = await db.select().from(adminCredentialsTable).limit(1);
-  if (!credential || !(await verifyPassword(parsed.data.password, credential.passwordHash))) {
+  const configuredPassword = process.env.ADMIN_PASSWORD;
+  const valid = configuredPassword
+    ? timingSafeEqual(
+        createHash("sha256").update(parsed.data.password).digest(),
+        createHash("sha256").update(configuredPassword).digest(),
+      )
+    : Boolean(credential && (await verifyPassword(parsed.data.password, credential.passwordHash)));
+  if (!valid) {
     res.status(401).json({ error: "パスワードが正しくありません" });
     return;
   }
