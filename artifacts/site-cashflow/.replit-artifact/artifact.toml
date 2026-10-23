@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "現場収支"
+description = "小規模な工務店・大工向けの現場別請求・入金・支払い管理アプリ。現場台帳、取引先、請求・入金、仕入・支払い、収支と資金繰りをスマートフォンから管理できます。"
+version = "1.0.0"
+id = "artifacts/site-cashflow"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22295
+
+[services.development]
+run = "pnpm --filter @workspace/site-cashflow run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/site-cashflow", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/site-cashflow/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22295"
+BASE_PATH = "/"

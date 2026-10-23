@@ -3,20 +3,25 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: 現場別請求・入金・仕入・支払い管理 API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: auth
+  - name: dashboard
+  - name: sites
+  - name: counterparties
+  - name: sales
+  - name: purchases
+  - name: cashflow
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +29,740 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /auth/status:
+    get:
+      operationId: getAuthStatus
+      tags: [auth]
+      summary: 初期設定とログイン状態
+      responses:
+        "200":
+          description: 認証状態
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthStatus"
+  /auth/setup:
+    post:
+      operationId: setupPassword
+      tags: [auth]
+      summary: 初回パスワード設定
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordInput"
+      responses:
+        "200":
+          description: 設定完了
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthStatus"
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: ログイン
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordInput"
+      responses:
+        "200":
+          description: ログイン完了
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthStatus"
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: ログアウト
+      responses:
+        "200":
+          description: ログアウト完了
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthStatus"
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: ダッシュボード集計と直近の資金予定
+      responses:
+        "200":
+          description: 概況
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+  /sites:
+    get:
+      operationId: getSites
+      tags: [sites]
+      summary: 現場一覧
+      responses:
+        "200":
+          description: 現場一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Site"
+    post:
+      operationId: createSite
+      tags: [sites]
+      summary: 現場登録
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SiteInput"
+      responses:
+        "201":
+          description: 登録完了
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Site"
+  /sites/{id}:
+    get:
+      operationId: getSite
+      tags: [sites]
+      summary: 現場詳細と収支
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: 現場詳細
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SiteDetail"
+    patch:
+      operationId: updateSite
+      tags: [sites]
+      summary: 現場更新
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SiteInput"
+      responses:
+        "200":
+          description: 更新完了
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Site"
+    delete:
+      operationId: deleteSite
+      tags: [sites]
+      summary: 現場削除
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: 削除完了
+  /counterparties:
+    get:
+      operationId: getCounterparties
+      tags: [counterparties]
+      summary: 取引先一覧
+      responses:
+        "200":
+          description: 取引先一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Counterparty"
+    post:
+      operationId: createCounterparty
+      tags: [counterparties]
+      summary: 取引先登録
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CounterpartyInput"
+      responses:
+        "201":
+          description: 登録完了
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Counterparty"
+  /counterparties/{id}:
+    patch:
+      operationId: updateCounterparty
+      tags: [counterparties]
+      summary: 取引先更新
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CounterpartyInput"
+      responses:
+        "200":
+          description: 更新完了
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Counterparty"
+    delete:
+      operationId: deleteCounterparty
+      tags: [counterparties]
+      summary: 取引先削除
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: 削除完了
+  /sales-invoices:
+    get:
+      operationId: getSalesInvoices
+      tags: [sales]
+      summary: 請求・未入金一覧
+      parameters:
+        - name: outstanding
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: 請求一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SalesInvoice"
+    post:
+      operationId: createSalesInvoice
+      tags: [sales]
+      summary: 請求登録
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SalesInvoiceInput"
+      responses:
+        "201":
+          description: 登録完了
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalesInvoice"
+  /sales-invoices/{id}:
+    get:
+      operationId: getSalesInvoice
+      tags: [sales]
+      summary: 請求詳細
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: 請求詳細
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalesInvoice"
+    patch:
+      operationId: updateSalesInvoice
+      tags: [sales]
+      summary: 請求更新
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SalesInvoiceInput"
+      responses:
+        "200":
+          description: 更新完了
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalesInvoice"
+    delete:
+      operationId: deleteSalesInvoice
+      tags: [sales]
+      summary: 請求削除
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: 削除完了
+  /sales-invoices/{id}/receipts:
+    post:
+      operationId: createReceipt
+      tags: [sales]
+      summary: 入金登録
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReceiptInput"
+      responses:
+        "201":
+          description: 入金登録完了
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Receipt"
+  /receipts/{id}:
+    delete:
+      operationId: deleteReceipt
+      tags: [sales]
+      summary: 入金記録削除
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: 削除完了
+  /purchase-bills:
+    get:
+      operationId: getPurchaseBills
+      tags: [purchases]
+      summary: 仕入・未払い一覧
+      parameters:
+        - name: outstanding
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: 仕入一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PurchaseBill"
+    post:
+      operationId: createPurchaseBill
+      tags: [purchases]
+      summary: 仕入登録
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PurchaseBillInput"
+      responses:
+        "201":
+          description: 登録完了
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseBill"
+  /purchase-bills/{id}:
+    patch:
+      operationId: updatePurchaseBill
+      tags: [purchases]
+      summary: 仕入更新
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PurchaseBillInput"
+      responses:
+        "200":
+          description: 更新完了
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseBill"
+    delete:
+      operationId: deletePurchaseBill
+      tags: [purchases]
+      summary: 仕入削除
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: 削除完了
+  /purchase-bills/{id}/payments:
+    post:
+      operationId: createSupplierPayment
+      tags: [purchases]
+      summary: 支払い登録
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupplierPaymentInput"
+      responses:
+        "201":
+          description: 支払い登録完了
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupplierPayment"
+  /supplier-payments/{id}:
+    delete:
+      operationId: deleteSupplierPayment
+      tags: [purchases]
+      summary: 支払い記録削除
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: 削除完了
+  /site-finances:
+    get:
+      operationId: getSiteFinances
+      tags: [dashboard]
+      summary: 現場別収支一覧
+      responses:
+        "200":
+          description: 現場別集計
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SiteFinance"
+  /cashflow:
+    get:
+      operationId: getCashflow
+      tags: [cashflow]
+      summary: 週・月ごとの資金繰り
+      parameters:
+        - name: groupBy
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [week, month]
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: 期間ごとの入出金予定
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CashflowPeriod"
+  /export.csv:
+    get:
+      operationId: exportCsv
+      tags: [cashflow]
+      summary: BOM付きUTF-8 CSV出力
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: 請求・入金・仕入請求・支払い記録
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
 components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
   schemas:
     HealthStatus:
       type: object
       properties:
         status:
           type: string
-      required:
-        - status
-
+      required: [status]
+    AuthStatus:
+      type: object
+      properties:
+        configured:
+          type: boolean
+        authenticated:
+          type: boolean
+      required: [configured, authenticated]
+    PasswordInput:
+      type: object
+      properties:
+        password:
+          type: string
+          minLength: 10
+          maxLength: 256
+      required: [password]
+    Site:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        clientId: { type: ["integer", "null"] }
+        clientName: { type: ["string", "null"] }
+        status: { type: string, enum: [active, completed] }
+        contractAmount: { type: ["integer", "null"] }
+        memo: { type: ["string", "null"] }
+        salesTotal: { type: integer }
+        purchasesTotal: { type: integer }
+        balance: { type: integer }
+      required: [id, name, clientId, clientName, status, contractAmount, memo, salesTotal, purchasesTotal, balance]
+    SiteDetail:
+      allOf:
+        - $ref: "#/components/schemas/Site"
+        - type: object
+          properties:
+            invoices:
+              type: array
+              items: { $ref: "#/components/schemas/SalesInvoice" }
+            purchases:
+              type: array
+              items: { $ref: "#/components/schemas/PurchaseBill" }
+          required: [invoices, purchases]
+    SiteInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        clientId: { type: ["integer", "null"] }
+        status: { type: string, enum: [active, completed] }
+        contractAmount: { type: ["integer", "null"], minimum: 0 }
+        memo: { type: ["string", "null"] }
+      required: [name, clientId, status, contractAmount, memo]
+    Counterparty:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        isClient: { type: boolean }
+        isSupplier: { type: boolean }
+        closingDay: { type: ["integer", "null"], minimum: 1, maximum: 31 }
+        paymentTerms: { type: ["string", "null"] }
+        memo: { type: ["string", "null"] }
+      required: [id, name, isClient, isSupplier, closingDay, paymentTerms, memo]
+    CounterpartyInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        isClient: { type: boolean }
+        isSupplier: { type: boolean }
+        closingDay: { type: ["integer", "null"], minimum: 1, maximum: 31 }
+        paymentTerms: { type: ["string", "null"], maxLength: 200 }
+        memo: { type: ["string", "null"] }
+      required: [name, isClient, isSupplier, closingDay, paymentTerms, memo]
+    InvoiceLineInput:
+      type: object
+      properties:
+        description: { type: string, minLength: 1, maxLength: 300 }
+        quantity: { type: integer, minimum: 1 }
+        unitPrice: { type: integer, minimum: 0 }
+        taxRate: { type: integer, enum: [8, 10] }
+      required: [description, quantity, unitPrice, taxRate]
+    InvoiceLine:
+      allOf:
+        - $ref: "#/components/schemas/InvoiceLineInput"
+        - type: object
+          properties:
+            id: { type: integer }
+            netAmount: { type: integer }
+            taxAmount: { type: integer }
+            grossAmount: { type: integer }
+          required: [id, netAmount, taxAmount, grossAmount]
+    SalesInvoiceInput:
+      type: object
+      properties:
+        siteId: { type: integer, minimum: 1 }
+        counterpartyId: { type: integer, minimum: 1 }
+        issuedAt: { type: ["string", "null"], format: date }
+        expectedPaymentAt: { type: ["string", "null"], format: date }
+        memo: { type: ["string", "null"] }
+        lines:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/InvoiceLineInput" }
+      required: [siteId, counterpartyId, issuedAt, expectedPaymentAt, memo, lines]
+    SalesInvoice:
+      type: object
+      properties:
+        id: { type: integer }
+        siteId: { type: integer }
+        siteName: { type: string }
+        counterpartyId: { type: integer }
+        counterpartyName: { type: string }
+        issuedAt: { type: ["string", "null"], format: date }
+        expectedPaymentAt: { type: ["string", "null"], format: date }
+        memo: { type: ["string", "null"] }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/InvoiceLine" }
+        netAmount: { type: integer }
+        taxAmount: { type: integer }
+        grossAmount: { type: integer }
+        receivedAmount: { type: integer }
+        outstandingAmount: { type: integer }
+        status: { type: string, enum: [unbilled, invoiced, paid, partially_paid] }
+        receipts:
+          type: array
+          items: { $ref: "#/components/schemas/Receipt" }
+      required: [id, siteId, siteName, counterpartyId, counterpartyName, issuedAt, expectedPaymentAt, memo, lines, netAmount, taxAmount, grossAmount, receivedAmount, outstandingAmount, status, receipts]
+    ReceiptInput:
+      type: object
+      properties:
+        receivedAt: { type: string, format: date }
+        amount: { type: integer, minimum: 1 }
+        memo: { type: ["string", "null"] }
+      required: [receivedAt, amount, memo]
+    Receipt:
+      type: object
+      properties:
+        id: { type: integer }
+        invoiceId: { type: integer }
+        receivedAt: { type: string, format: date }
+        amount: { type: integer }
+        memo: { type: ["string", "null"] }
+      required: [id, invoiceId, receivedAt, amount, memo]
+    PurchaseBillInput:
+      type: object
+      properties:
+        siteId: { type: integer, minimum: 1 }
+        counterpartyId: { type: integer, minimum: 1 }
+        billedAt: { type: string, format: date }
+        dueAt: { type: string, format: date }
+        memo: { type: ["string", "null"] }
+        lines:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/InvoiceLineInput" }
+      required: [siteId, counterpartyId, billedAt, dueAt, memo, lines]
+    PurchaseBill:
+      type: object
+      properties:
+        id: { type: integer }
+        siteId: { type: integer }
+        siteName: { type: string }
+        counterpartyId: { type: integer }
+        counterpartyName: { type: string }
+        billedAt: { type: string, format: date }
+        dueAt: { type: string, format: date }
+        memo: { type: ["string", "null"] }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/InvoiceLine" }
+        netAmount: { type: integer }
+        taxAmount: { type: integer }
+        grossAmount: { type: integer }
+        paidAmount: { type: integer }
+        outstandingAmount: { type: integer }
+        status: { type: string, enum: [unpaid, paid] }
+        payments:
+          type: array
+          items: { $ref: "#/components/schemas/SupplierPayment" }
+      required: [id, siteId, siteName, counterpartyId, counterpartyName, billedAt, dueAt, memo, lines, netAmount, taxAmount, grossAmount, paidAmount, outstandingAmount, status, payments]
+    SupplierPaymentInput:
+      type: object
+      properties:
+        paidAt: { type: string, format: date }
+        amount: { type: integer, minimum: 1 }
+        memo: { type: ["string", "null"] }
+      required: [paidAt, amount, memo]
+    SupplierPayment:
+      type: object
+      properties:
+        id: { type: integer }
+        billId: { type: integer }
+        paidAt: { type: string, format: date }
+        amount: { type: integer }
+        memo: { type: ["string", "null"] }
+      required: [id, billId, paidAt, amount, memo]
+    SiteFinance:
+      type: object
+      properties:
+        siteId: { type: integer }
+        siteName: { type: string }
+        status: { type: string, enum: [active, completed] }
+        sales: { type: integer }
+        purchases: { type: integer }
+        balance: { type: integer }
+        receivable: { type: integer }
+        payable: { type: integer }
+      required: [siteId, siteName, status, sales, purchases, balance, receivable, payable]
+    CashflowPeriod:
+      type: object
+      properties:
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        incoming: { type: integer }
+        outgoing: { type: integer }
+        net: { type: integer }
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/CashflowEvent" }
+      required: [startDate, endDate, incoming, outgoing, net, events]
+    CashflowEvent:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        direction: { type: string, enum: [incoming, outgoing] }
+        amount: { type: integer }
+        siteName: { type: string }
+        counterpartyName: { type: string }
+        description: { type: string }
+      required: [date, direction, amount, siteName, counterpartyName, description]
+    Dashboard:
+      type: object
+      properties:
+        receivable: { type: integer }
+        overdueReceivable: { type: integer }
+        payable: { type: integer }
+        upcomingIncoming: { type: integer }
+        upcomingOutgoing: { type: integer }
+        nextEvents:
+          type: array
+          items: { $ref: "#/components/schemas/CashflowEvent" }
+      required: [receivable, overdueReceivable, payable, upcomingIncoming, upcomingOutgoing, nextEvents]
